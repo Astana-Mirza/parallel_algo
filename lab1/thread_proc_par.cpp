@@ -22,13 +22,16 @@ ThreadSync out_sync;
 
 void task_dot_products( const Matrix& lhs, const Matrix& rhs, Matrix& result, size_t n, size_t count )
 {
-     for ( size_t pos = n; pos < lhs.get_rows(); pos += count )
+     for ( size_t pos = 0; pos < lhs.get_rows(); pos++ )
      {
           for ( size_t i = 0; i < lhs.get_cols(); i++ )
           {
                for ( size_t j = 0; j < rhs.get_cols(); j++ )
                {
-                    result.get( pos, j ) += lhs.get( pos, i ) * rhs.get( i, j );
+                    if ( ( pos + j ) % count == n )
+                    {
+                         result.get( pos, j ) += lhs.get( pos, i ) * rhs.get( i, j );
+                    }
                }
           }
      }
@@ -95,7 +98,7 @@ int main( int argc, char *argv[] )
      {
           return EXIT_FAILURE;
      }
-     if ( argc > 5 && !str_to_size( argv[ 4 ], thread_count ) )
+     if ( argc > 5 && !str_to_size( argv[ 5 ], thread_count ) )
      {
           std::cerr << "Cannot read number of calculation threads (P)\n";
           return EXIT_FAILURE;

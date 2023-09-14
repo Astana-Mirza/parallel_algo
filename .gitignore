@@ -1,4 +1,5 @@
 *.o
+out.txt
 lab1/thread_proc
 lab1/thread_proc_par
 lab1/in_proc

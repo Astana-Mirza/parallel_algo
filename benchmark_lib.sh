@@ -10,7 +10,7 @@ function benchmark()
     for i in $(seq "${count}"); do
       ${command} > out.txt
       if [ "${?}" != 0 ]; then
-        exit 1
+        break
       fi
     done
   }
