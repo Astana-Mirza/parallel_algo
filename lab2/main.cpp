@@ -1,63 +1,66 @@
 #include <matrix.h>
 #include <utils.h>
+#if defined( USE_FINE_GRAINED_QUEUE )
+#include <fine_grained_queue.h>
+#else
 #include <thread_safe_queue.h>
+#endif
 
 #include <string>
 #include <cstdlib>
 #include <ctime>
 #include <thread>
-#include <csignal>
+#include <atomic>
 #include <iostream>
 
 namespace
 {
 
+std::atomic_size_t tasks_done{ 0 };
+
 using Task = std::pair< Matrix, Matrix >;
+#if defined( USE_FINE_GRAINED_QUEUE )
+using TaskQueue = FineGrainedQueue< Task >;
+using MatrixQueue = FineGrainedQueue< Matrix >;
+#else
 using TaskQueue = ThreadSafeQueue< Task >;
 using MatrixQueue = ThreadSafeQueue< Matrix >;
-
-volatile std::sig_atomic_t g_stop_threads{ false };
-
-
-void on_sigint( int )
-{
-     g_stop_threads = true;
-}
+#endif
 
 
 void produce( size_t tasks_count, size_t size, TaskQueue& tasks )
 {
-     bool infinite = ( tasks_count == 0 );
-     while ( !g_stop_threads && ( infinite || tasks_count > 0 ) )
+     for ( size_t i = 0; i < tasks_count; i++ )
      {
           tasks.push( { Matrix::generate( size, size ), Matrix::generate( size, size ) } );
-          if ( !infinite )
-          {
-               tasks_count--;
-          }
      }
-     tasks.remove_producer();
 }
 
 
-void consume( TaskQueue& tasks, MatrixQueue& matrices )
+void consume( size_t tasks_count, TaskQueue& tasks, MatrixQueue& matrices )
 {
      auto processor = [ &matrices ]( const Task& task )
      {
           matrices.push( task.first * task.second );
      };
-     while ( !g_stop_threads && tasks.process( processor ) );
-     matrices.remove_producer();
+     for ( ; tasks_done < tasks_count; tasks_done++ )
+     {
+          tasks.process( processor );
+     }
+     tasks.finish();
 }
 
 
-void output( MatrixQueue& matrices, std::ostream& out )
+void output( size_t tasks_count, MatrixQueue& matrices, std::ostream& out )
 {
      auto processor = [ &matrices, &out ]( const Matrix& matr )
      {
           out << "RESULT\n" << matr << '\n';
      };
-     while ( matrices.process( processor ) );
+     for ( size_t i = 0; i < tasks_count; i++ )
+     {
+          matrices.process( processor );
+     }
 }
 
 
@@ -81,10 +84,9 @@ int main( int argc, char *argv[] )
      }
 
      std::srand( std::time( nullptr ) );
-     std::signal( SIGINT, on_sigint );
 
-     TaskQueue tasks( producer_count );
-     MatrixQueue matrices( consumer_count );
+     TaskQueue tasks;
+     MatrixQueue matrices;
 
      std::vector< std::thread > producers;
      std::vector< std::thread > consumers;
@@ -97,9 +99,9 @@ int main( int argc, char *argv[] )
      }
      for ( size_t i = 0; i < consumer_count; i++ )
      {
-          consumers.emplace_back( consume, std::ref( tasks ), std::ref( matrices ) );
+          consumers.emplace_back( consume, task_count * producer_count, std::ref( tasks ), std::ref( matrices ) );
      }
-     std::thread printer( output, std::ref( matrices ), std::ref( std::cout ) );
+     std::thread printer( output, task_count * producer_count, std::ref( matrices ), std::ref( std::cout ) );
 
 
      for ( size_t i = 0; i < producer_count; i++ )

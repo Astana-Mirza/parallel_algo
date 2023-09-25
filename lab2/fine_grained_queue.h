@@ -1,18 +1,22 @@
-#ifndef THREAD_SAFE_QUEUE_H
-#define THREAD_SAFE_QUEUE_H
+#ifndef FINE_GRAINED_QUEUE_H
+#define FINE_GRAINED_QUEUE_H
 
 #include <mutex>
 #include <condition_variable>
+#include <atomic>
 #include <functional>
-#include <queue>
+#include <memory>
 
-/// @brief Потокобезопасная очередь.
+/// @brief Потокобезопасная очередь с тонкими блокировками на односвязном списке.
 /// @details Поддерживает множество производителей и множество потребителей.
 /// @tparam T тип элемента очереди.
 template < typename T >
-class ThreadSafeQueue
+class FineGrainedQueue
 {
 public:
+     /// @brief Конструктор.
+     FineGrainedQueue();
+
      /// @brief Завершить работу и все ожидания.
      void finish();
 
@@ -28,12 +32,23 @@ public:
      bool process( const std::function< void( const T& ) >& func );
 
 private:
-     std::queue< T > queue_;                 ///< внутреннее представление очереди.
+     /// @brief Узел односвязного списка.
+     struct Node
+     {
+          T data;
+          std::unique_ptr< Node > next;
+     };
+
+     const Node* get_back_locked();
+
      std::condition_variable cond_;          ///< условие для ожидания.
-     std::mutex mutex_;                      ///< мьюеткс для блокировок.
-     bool finish_{ false };                  ///< условие окончания работы.
+     std::mutex front_mutex_;                ///< мьюеткс для блокировок доступа к первому элементу.
+     std::mutex back_mutex_;                 ///< мьюеткс для блокировок доступа к последнему элементу.
+     std::unique_ptr< Node > front_;         ///< начало очереди.
+     Node *back_;                            ///< конец очереди.
+     bool finish_;                           ///< условие окончания работы.
 };
 
-#include "thread_safe_queue.inl"
+#include "fine_grained_queue.inl"
 
-#endif // THREAD_SAFE_QUEUE_H
+#endif // FINE_GRAINED_QUEUE_H
