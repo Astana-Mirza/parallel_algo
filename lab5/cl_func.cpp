@@ -52,7 +52,7 @@ cl_context create_ocl_context( cl_uint& num_devices )
 cl_mem create_ocl_buffer( cl_context context, void *data, size_t size, cl_mem_flags flags )
 {
      cl_int err = 0;
-     cl_mem buffer = clCreateBuffer( context, flags, size, nullptr, &err );
+     cl_mem buffer = clCreateBuffer( context, flags, size, data, &err );
      if ( err )
      {
           throw std::runtime_error{ "Cannot create OpenCL buffer" };
@@ -97,6 +97,7 @@ cl_kernel create_ocl_kernel( cl_context context, const std::string& filename, co
      {
           throw std::runtime_error{ "Cannot create OpenCL kernel" };
      }
+     clReleaseProgram( prog );
      return kernel;
 }
 
@@ -161,7 +162,7 @@ void mandelbrot_ocl_calc( uint8_t *data, size_t width, size_t height, size_t cha
           size_t device_work_offset[ 2 ] = { 0, device_work_size[ 1 ] * i };
           size_t offset = device_work_offset[ 1 ] * channels * width;
           if ( clEnqueueNDRangeKernel( cmd_queue[ i ], kernel, 2, device_work_offset,
-                                        device_work_size, nullptr, 0, nullptr, nullptr ) )
+                                        device_work_size, local_work_size, 0, nullptr, nullptr ) )
           {
                throw std::runtime_error{ "Cannot enqueue OpenCL calculation command" };
           }

@@ -49,22 +49,26 @@ void mandelbrot_calc( uint8_t *buffer, size_t width, size_t height, size_t chann
 
 int main( int argc, char const *argv[] )
 {
-     size_t width, height;
+     size_t width, height, aligned_width, aligned_height;
      if ( argc != 4 || !str_to_size( argv[ 2 ], width ) || !str_to_size( argv[ 3 ], height ) )
      {
           std::cout << "Usage: " << argv[ 0 ] << " [cpu|ocl] <width> <height>\n";
           return EXIT_FAILURE;
      }
-     auto buffer = std::make_unique< uint8_t[] >( width * height * channels );
+     auto align = []( size_t x, size_t bound ){ return ( x + bound - 1 ) / bound * bound; };
+     aligned_width = align( width, local_work_size[ 0 ] );
+     aligned_height = align( height, local_work_size[ 1 ] );
+
+     auto buffer = std::make_unique< uint8_t[] >( aligned_width * aligned_height * channels );
 
      auto t1 = std::chrono::high_resolution_clock::now();
      if ( std::string( argv[ 1 ] ) == "cpu" )
      {
-          mandelbrot_calc( buffer.get(), width, height, channels );
+          mandelbrot_calc( buffer.get(), aligned_width, aligned_height, channels );
      }
      else if ( std::string( argv[ 1 ] ) == "ocl" )
      {
-          mandelbrot_ocl_calc( buffer.get(), width, height, channels );
+          mandelbrot_ocl_calc( buffer.get(), aligned_width, aligned_height, channels );
      }
      else
      {
@@ -78,7 +82,7 @@ int main( int argc, char const *argv[] )
 
      Window window( width, height, "Mandelbrot set" );
      window.show();
-     window.set_buffer( buffer.get(), width, height );
+     window.set_buffer( buffer.get(), aligned_width, aligned_height );
 
 	return Fl::run();
 }
